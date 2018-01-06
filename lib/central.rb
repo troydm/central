@@ -187,19 +187,37 @@ def symlink(from,to)
 end
 
 # git clone url into a path
-def git(url,path)
+def git(url,path,branch=nil)
   path = abs(path)
   if dir_exists?(path) && dir_exists?("#{path}/.git")
     cwd = pwd()
     chdir path
-    out = sudo('git pull')
+    out = nil
+    if branch
+      out = sudo('git fetch')
+      if out.size > 0
+        puts out
+      end
+      out = sudo("git checkout #{branch}")
+      unless out.downcase.include? 'is now at'
+        puts out
+      end
+      out = sudo("git pull origin #{branch}")
+    else
+      out = sudo('git pull')
+    end
     unless out.downcase.include? "already up-to-date"
       puts out
       puts "Git repository pulled: #{url} → #{path}"
     end
     chdir cwd
   else
-    out = sudo("git clone #{url} \"#{path}\"")
+    if branch
+      branch = "-b #{branch} "
+    else
+      branch = ''
+    end
+    out = sudo("git clone #{branch}#{url} \"#{path}\"")
     puts out
     puts "Git repository cloned: #{url} → #{path}"
   end
