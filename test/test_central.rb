@@ -34,6 +34,11 @@ class CentralTest < Minitest::Unit::TestCase
     assert_equal pwd, file_dir('central.gemspec')
   end
 
+  def test_shell
+    out = shell('mkdir test/test-dir && ls -lh test && rmdir test/test-dir')
+    assert_includes out, "test-dir"
+  end
+
   def test_ls
     fs = ls('.')
     assert_includes fs, "bin"
