@@ -66,7 +66,7 @@ def shell(command,options={:verbose => false, :silent => true})
             end
           end
         rescue IO::WaitReadable
-          IO.select([o],nil,nil,0.00001)
+          IO.select([o],nil,nil,0.1) unless stderr_open
         rescue EOFError
           stdout_open = false
         end
@@ -83,7 +83,7 @@ def shell(command,options={:verbose => false, :silent => true})
             end
           end
         rescue IO::WaitReadable
-          IO.select([e],nil,nil,0.00001)
+          IO.select([e],nil,nil,0.1) unless stdout_open
         rescue EOFError
           stderr_open = false
         end
