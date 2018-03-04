@@ -5,6 +5,7 @@
 
 require 'erb'
 require 'socket'
+require 'open3'
 
 # get hostname
 def hostname
@@ -24,40 +25,102 @@ def os
   end
 end
 
-# run command second time with sudo privileges if it previously failed because of insufficient permissions 
-def sudo(command,sudo=false)
-  if sudo
-    sudo = 'sudo '
-  else
-    sudo = ''
-  end
-  command = sudo+command
-  out = `#{command} 2>&1`
-  # removing line feed
-  if out.length > 0 && out[-1].ord == 10
-    out = out[0...-1]
-  end
-  # removing cariage return
-  if out.length > 0 && out[-1].ord == 13
-    out = out[0...-1]
-  end
-  if out.downcase.end_with?('permission denied')
-    if sudo
-      STDERR.puts "Couldn't execute #{command} due to permission denied\nrun central with sudo privileges"
-      exit 1
-    else
-      out = sudo(command,true)
+def linux?
+  return os == 'linux'
+end
+
+def osx?
+  return os == 'osx'
+end
+
+def freebsd?
+  return os == 'freebsd'
+end
+
+def solaris?
+  return os == 'solaris'
+end
+
+# run shell command and get output, optionaly can print command running if verbose and if not silent will also print to stdout and stderr
+$shell_return_value = nil
+def shell(command,options={:verbose => false, :silent => true})
+  silent = options[:silent]
+  puts "Executing: #{command}" if options[:verbose]
+  stdout = ''
+  stdout_line = ''
+  stderr = ''
+  stderr_line = ''
+  Open3.popen3(command) do |i,o,e,t|
+    stdout_open = true
+    stderr_open = true
+    while stdout_open or stderr_open
+      if stdout_open
+        begin
+          ch = o.read_nonblock(1)
+          stdout.insert(-1,ch)
+          unless silent
+            stdout_line.insert(-1,ch)
+            if ch == "\n"
+              STDOUT.puts stdout_line
+              stdout_line = ''
+            end
+          end
+        rescue IO::WaitReadable
+          IO.select([o],nil,nil,0.00001)
+        rescue EOFError
+          stdout_open = false
+        end
+      end
+      if stderr_open
+        begin
+          ch = e.read_nonblock(1)
+          stderr.insert(-1,ch)
+          unless silent
+            stderr_line.insert(-1,ch)
+            if ch == "\n"
+              STDERR.puts stderr_line
+              stderr_line = ''
+            end
+          end
+        rescue IO::WaitReadable
+          IO.select([e],nil,nil,0.00001)
+        rescue EOFError
+          stderr_open = false
+        end
+      end
     end
+    $shell_return_value = t.value
   end
-  return out
+  if stderr == ''
+    return stdout
+  else
+    return stdout, stderr
+  end
+end
+
+# run shell command with sudo prefix, acts same as shell
+def sudo(command,options)
+  return shell('sudo '+command, options)
 end
 
 # function used to check that system has all required tools installed
 def check_tool(name,check)
-  output = sudo("#{check} 2>&1 1>/dev/null").downcase
-  if output.include?('command not found')
+  begin
+    output = shell(check)
+    if output.kind_of?(String)
+      output = output.downcase
+      if output == '' or output.include?('command not found')
+        STDERR.puts "#{name} not found, please install it to use central"
+        exit 1
+      end
+    elsif output.kind_of?(Array)
+      if output[0] == '' and output[1] == ''
+        STDERR.puts "#{name} not found, please install it to use central"
+        exit 1
+      end
+    end
+  rescue Errno::ENOENT
     STDERR.puts "#{name} not found, please install it to use central"
-    exit 1
   end
 end
 
@@ -108,14 +171,14 @@ end
 
 # get full path of symlink
 def symlink_path(symlink)
-  sudo("readlink \"#{abs(symlink)}\"")
+  shell("readlink \"#{abs(symlink)}\"").strip
 end
 
 # make directory including intermediate directories
 def mkdir(path)
   path = abs(path)
   unless dir_exists?(path)
-    out = sudo("mkdir -p \"#{path}\"")
+    out = shell("mkdir -p \"#{path}\"")
     puts "Created directory: #{path}"
   end
 end
@@ -130,7 +193,7 @@ def rm(path,recursive=false)
   end
   is_dir = dir_exists?(path)
   is_symlink = symlink?(path)
-  out = sudo("rm #{recursive}-f \"#{path}\"")
+  out = shell("rm #{recursive}-f \"#{path}\"")
   if is_dir
     puts "Removed directory: #{path}"
   elsif is_symlink
@@ -149,7 +212,7 @@ end
 def touch(path)
   path = abs(path)
   unless file_exists?(path)
-    out = sudo("touch \"#{path}\"")
+    out = shell("touch \"#{path}\"")
     puts "Touched file: #{path}"
   end
 end
@@ -162,7 +225,7 @@ def chmod(path,permissions,recursive=false)
   else
     recursive = ''
   end
-  sudo("chmod #{recursive}#{permissions} \"#{path}\"")
+  shell("chmod #{recursive}#{permissions} \"#{path}\"")
 end
 
 # symlink path
@@ -181,30 +244,30 @@ def symlink(from,to)
     STDERR.puts "Directory #{from} exists in place of symlink..."
     exit 1
   else
-    out = sudo("ln -s \"#{to}\" \"#{from}\"")
+    out = shell("ln -s \"#{to}\" \"#{from}\"")
     puts "Created symlink: #{from} → #{to}"
   end
 end
 
 # git clone url into a path
-def git(url,path,branch=nil)
+def git(url,path,branch=nil,silent=false)
   path = abs(path)
   if dir_exists?(path) && dir_exists?("#{path}/.git")
     cwd = pwd()
     chdir path
     out = nil
     if branch
-      out = sudo('git fetch')
+      out = shell('git fetch',{:silent => silent})
       if out.size > 0
         puts out
       end
-      out = sudo("git checkout #{branch}")
+      out = shell("git checkout #{branch}",{:silent => silent})
       unless out.downcase.include? 'is now at'
         puts out
       end
-      out = sudo("git pull origin #{branch}")
+      out = shell("git pull origin #{branch}",{:silent => silent})
     else
-      out = sudo('git pull')
+      out = shell('git pull',{:silent => silent})
     end
     unless out.downcase.include? "already up-to-date"
       puts out
@@ -217,17 +280,17 @@ def git(url,path,branch=nil)
     else
       branch = ''
     end
-    out = sudo("git clone #{branch}#{url} \"#{path}\"")
+    out = shell("git clone #{branch}#{url} \"#{path}\"",{:silent => silent})
     puts out
     puts "Git repository cloned: #{url} → #{path}"
   end
 end
 
 # download url into a path using curl
-def curl(url,path)
+def curl(url,path,verbose=false)
   path = abs(path)
-  output = sudo("curl -s \"#{url}\"")
-  unless $?.exitstatus == 0
+  output = shell("curl -s -S \"#{url}\"",{:verbose => verbose, :silent => true})
+  unless $shell_return_value.success?
     STDERR.puts "Couldn't download file from #{url}..."
     exit 1
   end
@@ -260,9 +323,9 @@ def source(file,source)
   file = abs(file)
   source = abs(source)
   source_line = "source \"#{source}\""
-  out = sudo("grep -Fx '#{source_line}' \"#{file}\"")
+  out = shell("grep -Fx '#{source_line}' \"#{file}\"")
   if out == ""
-    sudo("echo '#{source_line}' >> \"#{file}\"")
+    shell("echo '#{source_line}' >> \"#{file}\"")
     puts "Added source #{source} line to #{file}"
   end
 end
@@ -279,7 +342,7 @@ def ls(path,options={})
   if options.key?(:grep) && options[:grep].length > 0
     command += " | grep #{options[:grep]}"
   end
-  output = sudo(command)
+  output = shell(command)
   if output.downcase.end_with?('no such file or directory')
     STDERR.puts "Couldn't ls directory #{path}..."
     exit 1
