@@ -106,21 +106,14 @@ end
 # function used to check that system has all required tools installed
 def check_tool(name,check)
   begin
-    output = shell(check)
-    if output.kind_of?(String)
-      output = output.downcase
-      if output == '' or output.include?('command not found')
-        STDERR.puts "#{name} not found, please install it to use central"
-        exit 1
-      end
-    elsif output.kind_of?(Array)
-      if output[0] == '' and output[1] == ''
-        STDERR.puts "#{name} not found, please install it to use central"
-        exit 1
-      end
+    output = shell(check+' 2>&1').downcase
+    if output == '' or output.include?('command not found')
+      STDERR.puts "#{name} not found, please install it to use central"
+      exit 1
     end
   rescue Errno::ENOENT
     STDERR.puts "#{name} not found, please install it to use central"
+    exit 1
   end
 end
 
@@ -171,14 +164,19 @@ end
 
 # get full path of symlink
 def symlink_path(symlink)
-  shell("readlink \"#{abs(symlink)}\"").strip
+  shell("readlink \"#{abs(symlink)}\" 2>&1").strip
 end
 
 # make directory including intermediate directories
 def mkdir(path)
   path = abs(path)
   unless dir_exists?(path)
-    out = shell("mkdir -p \"#{path}\"")
+    out = shell("mkdir -p \"#{path}\" 2>&1")
+    unless $shell_return_value.success?
+      STDERR.puts out
+      STDERR.puts "Couldn't create directory: #{path}"
+      exit 1
+    end
     puts "Created directory: #{path}"
   end
 end
@@ -193,7 +191,12 @@ def rm(path,recursive=false)
   end
   is_dir = dir_exists?(path)
   is_symlink = symlink?(path)
-  out = shell("rm #{recursive}-f \"#{path}\"")
+  out = shell("rm #{recursive}-f \"#{path}\" 2>&1")
+  unless $shell_return_value.success?
+    STDERR.puts out
+    STDERR.puts "Couldn't remove path: #{path}"
+    exit 1
+  end
   if is_dir
     puts "Removed directory: #{path}"
   elsif is_symlink
@@ -212,7 +215,12 @@ end
 def touch(path)
   path = abs(path)
   unless file_exists?(path)
-    out = shell("touch \"#{path}\"")
+    out = shell("touch \"#{path}\" 2>&1")
+    unless $shell_return_value.success?
+      STDERR.puts out
+      STDERR.puts "Couldn't touch file: #{path}"
+      exit 1
+    end
     puts "Touched file: #{path}"
   end
 end
@@ -244,7 +252,12 @@ def symlink(from,to)
     STDERR.puts "Directory #{from} exists in place of symlink..."
     exit 1
   else
-    out = shell("ln -s \"#{to}\" \"#{from}\"")
+    out = shell("ln -s \"#{to}\" \"#{from}\" 2>&1")
+    unless $shell_return_value.success?
+      STDERR.puts out
+      STDERR.puts "Couldn't create symlink: #{from} → #{to}"
+      exit 1
+    end
     puts "Created symlink: #{from} → #{to}"
   end
 end
@@ -257,20 +270,20 @@ def git(url,path,branch=nil,silent=false)
     chdir path
     out = nil
     if branch
-      out = shell('git fetch',{:silent => silent})
+      out = shell('git fetch 2>&1',{:silent => silent})
       if out.size > 0
-        puts out
+        puts out if silent
       end
-      out = shell("git checkout #{branch}",{:silent => silent})
+      out = shell("git checkout #{branch} 2>&1",{:silent => silent})
       unless out.downcase.include? 'is now at'
-        puts out
+        puts out if silent
       end
-      out = shell("git pull origin #{branch}",{:silent => silent})
+      out = shell("git pull origin #{branch} 2>&1",{:silent => silent})
     else
-      out = shell('git pull',{:silent => silent})
+      out = shell('git pull 2>&1',{:silent => silent})
     end
     unless out.downcase.include? "already up-to-date"
-      puts out
+      puts out if silent
       puts "Git repository pulled: #{url} → #{path}"
     end
     chdir cwd
@@ -280,8 +293,8 @@ def git(url,path,branch=nil,silent=false)
     else
       branch = ''
     end
-    out = shell("git clone #{branch}#{url} \"#{path}\"",{:silent => silent})
-    puts out
+    out = shell("git clone #{branch}#{url} \"#{path}\" 2>&1",{:silent => silent})
+    puts out if silent
     puts "Git repository cloned: #{url} → #{path}"
   end
 end
@@ -291,6 +304,7 @@ def curl(url,path,verbose=false)
   path = abs(path)
   output = shell("curl -s -S \"#{url}\"",{:verbose => verbose, :silent => true})
   unless $shell_return_value.success?
+    STDERR.puts output
     STDERR.puts "Couldn't download file from #{url}..."
     exit 1
   end
@@ -338,7 +352,7 @@ def ls(path,options={})
   else
     dotfiles = ''
   end
-  command = "ls -1 #{dotfiles}\"#{path}\""
+  command = "ls -1 #{dotfiles}\"#{path}\" 2>&1"
   if options.key?(:grep) && options[:grep].length > 0
     command += " | grep #{options[:grep]}"
   end
@@ -393,8 +407,8 @@ def run(file)
   cwd = pwd()
   file = abs(file)
   unless file_exists?(file)
-    puts "No configuration file: #{file} found"
-    return
+    STDERR.puts "No configuration file: #{file} found"
+    exit 1
   end
   puts "Running configuration: "+file
   file_cwd = file_dir(file)
