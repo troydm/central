@@ -1,4 +1,4 @@
-central
+central [![Gem Version](https://badge.fury.io/rb/central.svg)](https://badge.fury.io/rb/central) [![Build Status](https://travis-ci.org/troydm/central.png?branch=master)](https://travis-ci.org/troydm/central)
 ==========
 
 central dotfiles management Ruby gem
