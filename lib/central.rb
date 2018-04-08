@@ -1,3 +1,4 @@
+# encoding: utf-8
 # -------------------------------------------------------------------------
 # # central - dot files manager licensed under LGPLv3 (see LICENSE file)  |
 # # written in Ruby by Dmitry Geurkov (d.geurkov@gmail.com)               |
