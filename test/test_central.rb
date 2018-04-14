@@ -97,6 +97,19 @@ class CentralTest < Minitest::Unit::TestCase
     rm 'test/testsource'
   end
 
+  def test_copy
+    f1 = "test/testfile1"
+    f2 = "test/testfile2"
+    write f1,"test"
+    copy f1,f2
+    assert_equal read(f1), read(f2)
+    write f1,"changed test"
+    copy f1,f2
+    assert_equal read(f1), read(f2)
+    rm f1
+    rm f2
+  end
+
   def test_erb
     write "test/testerb","<%= 'hello' %>"
     erb 'test/testerb','test/testerboutput'

@@ -7,6 +7,7 @@
 require 'erb'
 require 'socket'
 require 'open3'
+require 'fileutils'
 
 # get hostname
 def hostname
@@ -378,6 +379,27 @@ def ls(path,options={})
     ls = ls.keep_if {|f| !File.file?("#{path}/#{f}") }
   end
   return ls
+end
+
+# copy
+def copy(from,to)
+  from = abs(from)
+  to = abs(to)
+  if dir_exists?(from)
+    (Dir.entries(from).select { |f| f != "." and f != ".." }).each do |f|
+      FileUtils.mkdir_p(to)
+      copy("#{from}/#{f}","#{to}/#{f}")
+    end
+  else
+    unless file_exists?(from)
+      STDERR.puts "Couldn't access file #{from}..."
+      exit 1
+    end
+    if !file_exists?(to) or !FileUtils.compare_file(from,to)
+      FileUtils.copy_file(from,to)
+      puts "Copied file: #{from} → #{to}"
+    end
+  end
 end
 
 # process erb template into an output_file
