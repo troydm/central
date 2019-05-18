@@ -44,13 +44,13 @@ class CentralTest < Minitest::Unit::TestCase
     assert_includes fs, "bin"
     assert_includes fs, "lib"
     assert_includes fs, "central.gemspec"
-    fs = ls('.',{:dotfiles => true})
+    fs = ls('.',dotfiles: true)
     assert_includes fs, ".gitignore"
-    fs = ls('.',{:dir => true, :file => false})
+    fs = ls('.', file: false)
     assert_includes fs, "bin"
     assert_includes fs, "lib"
     refute_includes fs, "central.gemspec"
-    fs = ls('.',{:dir => false, :file => true})
+    fs = ls('.', dir: false)
     refute_includes fs, "bin"
     refute_includes fs, "lib"
     assert_includes fs, "central.gemspec"

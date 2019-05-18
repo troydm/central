@@ -45,9 +45,8 @@ end
 
 # run shell command and get output, optionaly can print command running if verbose and if not silent will also print to stdout and stderr
 $shell_return_value = nil
-def shell(command,options={:verbose => false, :silent => true})
-  silent = options[:silent]
-  puts "Executing: #{command}" if options[:verbose]
+def shell(command,verbose: false, silent: true)
+  puts "Executing: #{command}" if verbose
   stdout = ''
   stdout_line = ''
   stderr = ''
@@ -101,8 +100,8 @@ def shell(command,options={:verbose => false, :silent => true})
 end
 
 # run shell command with sudo prefix, acts same as shell
-def sudo(command,options)
-  return shell('sudo '+command, options)
+def sudo(command,verbose:,silent:)
+  return shell('sudo '+command, verbose: verbose, silent: silent)
 end
 
 # function used to check that system has all required tools installed
@@ -151,7 +150,7 @@ end
 # check if directory exists
 def dir_exists?(path)
   path = abs(path)
-  Dir.exists?(path)
+  Dir.exist?(path)
 end
 
 # get directory name of a file
@@ -184,7 +183,7 @@ def mkdir(path)
 end
 
 # remove file/directory
-def rm(path,recursive=false)
+def rm(path,recursive: false)
   path = abs(path)
   if recursive
     recursive = '-R '
@@ -210,7 +209,7 @@ end
 
 # remove directory recursively
 def rmdir(path)
-  rm(path,true)
+  rm(path,recursive: true)
 end
 
 # touch file
@@ -228,7 +227,7 @@ def touch(path)
 end
 
 # change file permissions
-def chmod(path,permissions,recursive=false)
+def chmod(path,permissions,recursive: false)
   path = abs(path)
   if recursive
     recursive = '-R '
@@ -265,7 +264,7 @@ def symlink(from,to)
 end
 
 # git clone url into a path
-def git(url,path,branch=nil,silent=false)
+def git(url,path,branch: nil,silent: false,depth: nil)
   path = abs(path)
   if dir_exists?(path) && dir_exists?("#{path}/.git")
     cwd = pwd()
@@ -295,23 +294,26 @@ def git(url,path,branch=nil,silent=false)
     else
       branch = ''
     end
-    out = shell("git clone #{branch}#{url} \"#{path}\" 2>&1",{:silent => silent})
+    if depth
+      depth = '--depth '+depth.to_s+' '
+    else
+      depth = ''
+    end
+    out = shell("git clone #{depth}#{branch}#{url} \"#{path}\" 2>&1",{:silent => silent})
     puts out if silent
     puts "Git repository cloned: #{url} → #{path}"
   end
 end
 
 # download url into a path using curl
-def curl(url,path,verbose=false)
+def curl(url,path, verbose: false)
   path = abs(path)
-  output = shell("curl -s -S \"#{url}\"",{:verbose => verbose, :silent => true})
+  puts "Downloading #{url} → #{path}"
+  output = shell("curl -s -S \"#{url}\"",verbose: verbose, silent: true)
   unless $shell_return_value.success?
     STDERR.puts output
     STDERR.puts "Couldn't download file from #{url}..."
     exit 1
-  end
-  if File.exists?(path) && File.read(path) == output
-    return
   end
   File.write(path,output)
   puts "Downloaded #{url} → #{path}"
@@ -347,16 +349,16 @@ def source(file,source)
 end
 
 # list directory content
-def ls(path,options={})
+def ls(path,dotfiles: false, grep: '', dir: true, file: true)
   path = abs(path)
-  if options[:dotfiles]
+  if dotfiles
     dotfiles = '-a '
   else
     dotfiles = ''
   end
   command = "ls -1 #{dotfiles}\"#{path}\" 2>&1"
-  if options.key?(:grep) && options[:grep].length > 0
-    command += " | grep #{options[:grep]}"
+  if grep.length > 0
+    command += " | grep #{grep}"
   end
   output = shell(command)
   if output.downcase.end_with?('no such file or directory')
@@ -364,14 +366,6 @@ def ls(path,options={})
     exit 1
   end
   ls = output.split("\n")
-  dir = true
-  file = true
-  if options.key?(:dir)
-    dir = options[:dir]
-  end
-  if options.key?(:file)
-    file = options[:file]
-  end
   unless dir
     ls = ls.keep_if {|f| !File.directory?("#{path}/#{f}") }
   end
@@ -414,7 +408,7 @@ def erb(file,output_file = nil)
   end
   if file_exists?(file)
     output = ERB.new(File.read(file)).result
-    if File.exists?(output_file) && File.read(output_file) == output
+    if File.exist?(output_file) && File.read(output_file) == output
       return
     end
     File.write(output_file,output)
