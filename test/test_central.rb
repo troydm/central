@@ -35,7 +35,7 @@ class CentralTest < Minitest::Unit::TestCase
   end
 
   def test_shell
-    out = shell('mkdir test/test-dir && ls -lh test && rmdir test/test-dir')
+    _, out, = shell('mkdir test/test-dir && ls -lh test && rmdir test/test-dir')
     assert_includes out, "test-dir"
   end
 

@@ -1,4 +1,3 @@
-# encoding: utf-8
 # -------------------------------------------------------------------------
 # # central - dot files manager licensed under LGPLv3 (see LICENSE file)  |
 # # written in Ruby by Dmitry Geurkov (d.geurkov@gmail.com)               |
@@ -9,6 +8,33 @@ require 'socket'
 require 'open3'
 require 'fileutils'
 
+# cli colors
+COLOR_RED = 31
+COLOR_GREEN = 32
+
+# putsc, puts with color
+def color(message, color)
+  "\e[#{color}m#{message}\e[0m"
+end
+
+# info
+def info(message, param = nil)
+  puts color(message, COLOR_GREEN) +
+       (param.nil? ? '' : ': ' + param)
+end
+
+# error
+def error(message, param = nil)
+  puts color(message, COLOR_RED) +
+       (param.nil? ? '' : ': ' + param)
+end
+
+# fail, print message to stderr and exit with 1
+def fail(message, param = nil)
+  error message, param
+  exit 1
+end
+
 # get hostname
 def hostname
   Socket.gethostname
@@ -17,114 +43,106 @@ end
 # get operating system
 def os
   if RUBY_PLATFORM.include?('linux')
-    return 'linux'
+    'linux'
   elsif RUBY_PLATFORM.include?('darwin')
-    return 'osx'
+    'osx'
   elsif RUBY_PLATFORM.include?('freebsd')
-    return 'freebsd'
+    'freebsd'
   elsif RUBY_PLATFORM.include?('solaris')
-    return 'solaris'
+    'solaris'
   end
 end
 
 def linux?
-  return os == 'linux'
+  os == 'linux'
 end
 
 def osx?
-  return os == 'osx'
+  os == 'osx'
 end
 
 def freebsd?
-  return os == 'freebsd'
+  os == 'freebsd'
 end
 
 def solaris?
-  return os == 'solaris'
+  os == 'solaris'
 end
 
-# run shell command and get output, optionaly can print command running if verbose and if not silent will also print to stdout and stderr
-$shell_return_value = nil
-def shell(command,verbose: false, silent: true)
-  puts "Executing: #{command}" if verbose
+# run shell command and get output, optionaly can print command running
+# if verbose and if not silent will also print to stdout and stderr
+def shell(command, verbose: false, silent: true)
+  info 'Executing', command if verbose
+  exit_code = nil
   stdout = ''
   stdout_line = ''
   stderr = ''
   stderr_line = ''
-  Open3.popen3(command) do |i,o,e,t|
+  Open3.popen3(command) do |_, o, e, t|
     stdout_open = true
     stderr_open = true
-    while stdout_open or stderr_open
+    while stdout_open || stderr_open
       if stdout_open
         begin
           ch = o.read_nonblock(1)
-          stdout.insert(-1,ch)
+          stdout.insert(-1, ch)
           unless silent
-            stdout_line.insert(-1,ch)
+            stdout_line.insert(-1, ch)
             if ch == "\n"
               STDOUT.puts stdout_line
               stdout_line = ''
             end
           end
         rescue IO::WaitReadable
-          IO.select([o],nil,nil,0.1) unless stderr_open
+          IO.select([o], nil, nil, 0.01) unless stderr_open
         rescue EOFError
           stdout_open = false
         end
       end
-      if stderr_open
-        begin
-          ch = e.read_nonblock(1)
-          stderr.insert(-1,ch)
-          unless silent
-            stderr_line.insert(-1,ch)
-            if ch == "\n"
-              STDERR.puts stderr_line
-              stderr_line = ''
-            end
+      next unless stderr_open
+
+      begin
+        ch = e.read_nonblock(1)
+        stderr.insert(-1, ch)
+        unless silent
+          stderr_line.insert(-1, ch)
+          if ch == "\n"
+            STDERR.puts stderr_line
+            stderr_line = ''
           end
-        rescue IO::WaitReadable
-          IO.select([e],nil,nil,0.1) unless stdout_open
-        rescue EOFError
-          stderr_open = false
         end
+      rescue IO::WaitReadable
+        IO.select([e], nil, nil, 0.01) unless stdout_open
+      rescue EOFError
+        stderr_open = false
       end
     end
-    $shell_return_value = t.value
+    exit_code = t.value
   end
-  if stderr == ''
-    return stdout
-  else
-    return stdout, stderr
-  end
+  [exit_code, stdout, stderr]
 end
 
 # run shell command with sudo prefix, acts same as shell
-def sudo(command,verbose:,silent:)
-  return shell('sudo '+command, verbose: verbose, silent: silent)
+def sudo(command, verbose:, silent:)
+  shell('sudo ' + command, verbose: verbose, silent: silent)
 end
 
 # function used to check that system has all required tools installed
-def check_tool(name,check)
-  begin
-    output = shell(check+' 2>&1').downcase
-    if output == '' or output.include?('command not found')
-      STDERR.puts "#{name} not found, please install it to use central"
-      exit 1
-    end
-  rescue Errno::ENOENT
-    STDERR.puts "#{name} not found, please install it to use central"
-    exit 1
+def check_tool(name, check)
+  _, output, = shell(check + ' 2>&1')
+  if output == '' || output.downcase.include?('command not found')
+    fail "#{name} not found, please install it to use central"
   end
+rescue Errno::ENOENT
+  fail "#{name} not found, please install it to use central"
 end
 
-check_tool('file','file --version')
-check_tool('grep','grep --version')
-check_tool('ln','ln --version')
-check_tool('readlink','readlink --version')
-check_tool('git','git --version')
-check_tool('curl','curl --version')
-
+check_tool('file', 'file --version')
+check_tool('grep', 'grep --version')
+check_tool('ln', 'ln --version')
+check_tool('readlink', 'readlink --version')
+check_tool('git', 'git --version')
+check_tool('curl', 'curl --version')
 
 # current working directory
 def pwd
@@ -133,7 +151,7 @@ end
 
 # absolute path
 def abs(path)
-  path = File.absolute_path(File.expand_path(path))
+  File.absolute_path(File.expand_path(path))
 end
 
 # change current working directory
@@ -165,80 +183,70 @@ end
 
 # get full path of symlink
 def symlink_path(symlink)
-  shell("readlink \"#{abs(symlink)}\" 2>&1").strip
+  _, out, = shell("readlink -f \"#{abs(symlink)}\" 2>&1")
+  out.strip
 end
 
 # make directory including intermediate directories
 def mkdir(path)
   path = abs(path)
-  unless dir_exists?(path)
-    out = shell("mkdir -p \"#{path}\" 2>&1")
-    unless $shell_return_value.success?
-      STDERR.puts out
-      STDERR.puts "Couldn't create directory: #{path}"
-      exit 1
-    end
-    puts "Created directory: #{path}"
+  return if dir_exists?(path)
+
+  exit_code, out, = shell("mkdir -p \"#{path}\" 2>&1")
+  unless exit_code.success?
+    error out
+    fail "Couldn't create directory", path
   end
+  info 'Created directory', path
 end
 
 # remove file/directory
-def rm(path,recursive: false)
+def rm(path, recursive: false)
   path = abs(path)
-  if recursive
-    recursive = '-R '
-  else
-    recursive = ''
-  end
+  recursive = recursive ? '-R ' : ''
   is_dir = dir_exists?(path)
   is_symlink = symlink?(path)
-  out = shell("rm #{recursive}-f \"#{path}\" 2>&1")
-  unless $shell_return_value.success?
-    STDERR.puts out
-    STDERR.puts "Couldn't remove path: #{path}"
-    exit 1
+  exit_code, out, = shell("rm #{recursive}-f \"#{path}\" 2>&1")
+  unless exit_code.success?
+    error out
+    fail "Couldn't remove path", path
   end
   if is_dir
-    puts "Removed directory: #{path}"
+    info 'Removed directory', path
   elsif is_symlink
-    puts "Removed symlink: #{path}"
+    info 'Removed symlink', path
   else
-    puts "Removed file: #{path}"
+    info 'Removed file', path
   end
 end
 
 # remove directory recursively
 def rmdir(path)
-  rm(path,recursive: true)
+  rm(path, recursive: true)
 end
 
 # touch file
 def touch(path)
   path = abs(path)
-  unless file_exists?(path)
-    out = shell("touch \"#{path}\" 2>&1")
-    unless $shell_return_value.success?
-      STDERR.puts out
-      STDERR.puts "Couldn't touch file: #{path}"
-      exit 1
-    end
-    puts "Touched file: #{path}"
+  return if file_exists?(path)
+
+  exit_code, out, = shell("touch \"#{path}\" 2>&1")
+  unless exit_code.success?
+    error out
+    fail "Couldn't touch file", path
   end
+  info 'Touched file', path
 end
 
 # change file permissions
-def chmod(path,permissions,recursive: false)
+def chmod(path, permissions, recursive: false)
   path = abs(path)
-  if recursive
-    recursive = '-R '
-  else
-    recursive = ''
-  end
+  recursive = recursive ? '-R ' : ''
   shell("chmod #{recursive}#{permissions} \"#{path}\"")
 end
 
 # symlink path
-def symlink(from,to)
+def symlink(from, to)
   from = abs(from)
   to = abs(to)
   if symlink?(from)
@@ -247,187 +255,156 @@ def symlink(from,to)
       symlink from, to
     end
   elsif file_exists?(from)
-    STDERR.puts "File #{from} exists in place of symlink..."
-    exit 1
+    fail "File #{from} exists in place of symlink..."
   elsif dir_exists?(from)
-    STDERR.puts "Directory #{from} exists in place of symlink..."
-    exit 1
+    fail "Directory #{from} exists in place of symlink..."
   else
-    out = shell("ln -s \"#{to}\" \"#{from}\" 2>&1")
-    unless $shell_return_value.success?
-      STDERR.puts out
-      STDERR.puts "Couldn't create symlink: #{from} → #{to}"
-      exit 1
+    exit_code, out, = shell("ln -s \"#{to}\" \"#{from}\" 2>&1")
+    unless exit_code.success?
+      error out
+      fail "Couldn't create symlink", "#{from} → #{to}"
     end
-    puts "Created symlink: #{from} → #{to}"
+    info 'Created symlink', "#{from} → #{to}"
   end
 end
 
 # git clone url into a path
-def git(url,path,branch: nil,silent: false,depth: nil)
+def git(url, path, branch: nil, silent: true, depth: nil)
   path = abs(path)
   if dir_exists?(path) && dir_exists?("#{path}/.git")
-    cwd = pwd()
+    cwd = pwd
     chdir path
     out = nil
     if branch
-      out = shell('git fetch 2>&1',{:silent => silent})
-      if out.size > 0
-        puts out if silent
-      end
-      out = shell("git checkout #{branch} 2>&1",{:silent => silent})
+      _, out, = shell('git fetch 2>&1', silent: silent)
+      puts out if silent && out.size.positive?
+      _, out, = shell("git checkout #{branch} 2>&1", silent: silent)
       unless out.downcase.include? 'is now at'
         puts out if silent
       end
-      out = shell("git pull origin #{branch} 2>&1",{:silent => silent})
+      _, out, = shell("git pull origin #{branch} 2>&1", silent: silent)
     else
-      out = shell('git pull 2>&1',{:silent => silent})
+      _, out, = shell('git pull 2>&1', silent: silent)
     end
-    unless out.downcase.include? "already up-to-date"
+    unless out.downcase.include? 'already up-to-date'
       puts out if silent
-      puts "Git repository pulled: #{url} → #{path}"
+      info 'Git repository pulled', "#{url} → #{path}"
     end
     chdir cwd
   else
-    if branch
-      branch = "-b #{branch} "
-    else
-      branch = ''
-    end
-    if depth
-      depth = '--depth '+depth.to_s+' '
-    else
-      depth = ''
-    end
-    out = shell("git clone #{depth}#{branch}#{url} \"#{path}\" 2>&1",{:silent => silent})
+    branch = branch ? "-b #{branch} " : ''
+    depth = depth ? "--depth #{depth} " : ''
+    _, out, = shell("git clone #{depth}#{branch}#{url} \"#{path}\" 2>&1",
+                    silent: silent)
     puts out if silent
-    puts "Git repository cloned: #{url} → #{path}"
+    info 'Git repository cloned', "#{url} → #{path}"
   end
 end
 
 # download url into a path using curl
-def curl(url,path, verbose: false)
+def curl(url, path, verbose: false)
   path = abs(path)
-  puts "Downloading #{url} → #{path}"
-  output = shell("curl -s -S \"#{url}\"",verbose: verbose, silent: true)
-  unless $shell_return_value.success?
-    STDERR.puts output
-    STDERR.puts "Couldn't download file from #{url}..."
-    exit 1
+  info 'Downloading', "#{url} → #{path}"
+  exit_code, output, = shell("curl -s -S \"#{url}\"",
+                             verbose: verbose, silent: true)
+  unless exit_code.success?
+    error output
+    fail "Couldn't download file from", url
   end
-  File.write(path,output)
-  puts "Downloaded #{url} → #{path}"
+  File.write(path, output)
+  info 'Downloaded', "#{url} → #{path}"
 end
 
 # read content of a file
 def read(file)
   file = abs(file)
-  if file_exists?(file)
-    return File.read(file)
-  else
-    STDERR.puts "Couldn't read file #{file}..."
-    exit 1
-  end
+  return File.read(file) if file_exists?(file)
+
+  fail "Couldn't read file", file
 end
 
 # write content into a file
-def write(file,content)
+def write(file, content)
   file = abs(file)
-  File.write(file,content)
+  File.write(file, content)
 end
 
 # source file in sh/bash/zsh script
-def source(file,source)
+def source(file, source)
   file = abs(file)
   source = abs(source)
   source_line = "source \"#{source}\""
-  out = shell("grep -Fx '#{source_line}' \"#{file}\"")
-  if out == ""
-    shell("echo '#{source_line}' >> \"#{file}\"")
-    puts "Added source #{source} line to #{file}"
-  end
+  _, out, = shell("grep -Fx '#{source_line}' \"#{file}\"")
+  return unless out == ''
+
+  shell("echo '#{source_line}' >> \"#{file}\"")
+  info 'Added source', "#{source} line to #{file}"
 end
 
 # list directory content
-def ls(path,dotfiles: false, grep: '', dir: true, file: true)
+def ls(path, dotfiles: false, grep: '', dir: true, file: true)
   path = abs(path)
-  if dotfiles
-    dotfiles = '-a '
-  else
-    dotfiles = ''
-  end
+  dotfiles = dotfiles ? '-a ' : ''
   command = "ls -1 #{dotfiles}\"#{path}\" 2>&1"
-  if grep.length > 0
-    command += " | grep #{grep}"
-  end
-  output = shell(command)
+  command += " | grep #{grep}" unless grep.empty?
+
+  _, output, = shell(command)
   if output.downcase.end_with?('no such file or directory')
-    STDERR.puts "Couldn't ls directory #{path}..."
-    exit 1
+    fail "Couldn't ls directory", path
   end
+
   ls = output.split("\n")
-  unless dir
-    ls = ls.keep_if {|f| !File.directory?("#{path}/#{f}") }
-  end
-  unless file
-    ls = ls.keep_if {|f| !File.file?("#{path}/#{f}") }
-  end
-  return ls
+  ls = ls.keep_if { |f| !File.directory?("#{path}/#{f}") } unless dir
+  ls = ls.keep_if { |f| !File.file?("#{path}/#{f}") } unless file
+  ls
+end
+
+# copy_file
+def copy_file(from, to)
+  fail "Couldn't access file", from unless file_exists?(from)
+
+  return if file_exists?(to) && FileUtils.compare_file(from, to)
+
+  FileUtils.copy_file(from, to)
+  info 'Copied file', "#{from} → #{to}"
 end
 
 # copy
-def copy(from,to)
+def copy(from, to)
   from = abs(from)
   to = abs(to)
   if dir_exists?(from)
-    (Dir.entries(from).select { |f| f != "." and f != ".." }).each do |f|
+    (Dir.entries(from).select { |f| f != '.' && f != '..' }).each do |f|
       FileUtils.mkdir_p(to)
-      copy("#{from}/#{f}","#{to}/#{f}")
+      copy("#{from}/#{f}", "#{to}/#{f}")
     end
   else
-    unless file_exists?(from)
-      STDERR.puts "Couldn't access file #{from}..."
-      exit 1
-    end
-    if !file_exists?(to) or !FileUtils.compare_file(from,to)
-      FileUtils.copy_file(from,to)
-      puts "Copied file: #{from} → #{to}"
-    end
+    copy_file(from, to)
   end
 end
 
 # process erb template into an output_file
-def erb(file,output_file = nil)
+def erb(file, output_file = nil)
   file = abs(file)
-  if output_file == nil
-    if file.end_with?('.erb')
-      output_file = file[0...-4]
-    else
-      output_file = file+'.out'
-    end
+  fail 'No erb file found', file unless file_exists?(file)
+
+  if output_file.nil?
+    output_file = file.end_with?('.erb') ? file[0...-4] : file + '.out'
   end
-  if file_exists?(file)
-    output = ERB.new(File.read(file)).result
-    if File.exist?(output_file) && File.read(output_file) == output
-      return
-    end
-    File.write(output_file,output)
-    puts "Processed erb #{file} → #{output_file}"
-  else
-    STDERR.puts "Couldn't process erb file #{file}..."
-    exit 1
-  end
+  out = ERB.new(File.read(file)).result
+  return if File.exist?(output_file) && File.read(output_file) == out
+
+  File.write(output_file, out)
+  info 'Processed erb', "#{file} → #{output_file}"
 end
 
 # run configuration.rb file
 def run(file)
-  cwd = pwd()
+  cwd = pwd
   file = abs(file)
-  unless file_exists?(file)
-    STDERR.puts "No configuration file: #{file} found"
-    exit 1
-  end
-  puts "Running configuration: "+file
+  fail 'No configuration file found', file unless file_exists?(file)
+
+  info 'Running configuration', file
   file_cwd = file_dir(file)
   chdir file_cwd
   load file
@@ -436,19 +413,16 @@ end
 
 # run configuration.rb file only if it exists
 def run_if_exists(file)
-  if file_exists?(file)
-    run file
-  end
+  run file if file_exists?(file)
 end
 
 # run central configuration
 def central(configurations)
-  if configurations.instance_of?(Array) && configurations.length > 0
-    configurations.each {|configuration| run configuration }
+  if configurations.instance_of?(Array) && !configurations.empty?
+    configurations.each { |configuration| run configuration }
   elsif configurations.instance_of?(String)
     run configurations
   else
     run 'configuration.rb'
   end
 end
-

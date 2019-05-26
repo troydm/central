@@ -1,5 +1,5 @@
 #!/usr/bin/env ruby
-# encoding: utf-8
+# frozen_string_literal: true
 
 # -------------------------------------------------------------------------
 # # central - dot files manager licensed under LGPLv3 (see LICENSE file)  |
@@ -8,13 +8,13 @@
 
 require 'central'
 
-if ARGV.length > 0
+unless ARGV.empty?
   if ARGV[0] == '-v' || ARGV[0] == '--version' || ARGV[0] == '-version'
-    puts "central v0.2.4"
+    puts 'central v0.2.5'
     exit 0
   end
   if ARGV[0] == '-h' || ARGV[0] == '--help' || ARGV[0] == '-help'
-    puts "central [path/to/configuration.rb]"
+    puts 'central [path/to/configuration.rb]'
     exit 0
   end
 end
