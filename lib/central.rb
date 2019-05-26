@@ -183,7 +183,7 @@ end
 
 # get full path of symlink
 def symlink_path(symlink)
-  _, out, = shell("readlink -f \"#{abs(symlink)}\" 2>&1")
+  _, out, = shell("readlink \"#{abs(symlink)}\" 2>&1")
   out.strip
 end
 
@@ -286,7 +286,7 @@ def git(url, path, branch: nil, silent: true, depth: nil)
     else
       _, out, = shell('git pull 2>&1', silent: silent)
     end
-    unless out.downcase.include? 'already up-to-date'
+    unless out.downcase.include? 'already up'
       puts out if silent
       info 'Git repository pulled', "#{url} → #{path}"
     end
