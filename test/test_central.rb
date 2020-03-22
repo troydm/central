@@ -3,7 +3,7 @@ require 'central'
 
 class CentralTest < Minitest::Unit::TestCase
   def test_os
-    assert_includes ["linux","osx","freebsd","solaris"], os
+    assert_includes ["linux", "osx", "freebsd", "solaris"], os
   end
 
   def test_pwd
@@ -16,7 +16,7 @@ class CentralTest < Minitest::Unit::TestCase
   end
 
   def test_chdir
-    d = pwd()
+    d = pwd
     chdir '~'
     assert_equal abs('~'), pwd
     chdir d
@@ -41,19 +41,19 @@ class CentralTest < Minitest::Unit::TestCase
 
   def test_ls
     fs = ls('.')
-    assert_includes fs, "bin"
-    assert_includes fs, "lib"
-    assert_includes fs, "central.gemspec"
+    assert_includes fs, 'bin'
+    assert_includes fs, 'lib'
+    assert_includes fs, 'central.gemspec'
     fs = ls('.',dotfiles: true)
-    assert_includes fs, ".gitignore"
+    assert_includes fs, '.gitignore'
     fs = ls('.', file: false)
-    assert_includes fs, "bin"
-    assert_includes fs, "lib"
-    refute_includes fs, "central.gemspec"
+    assert_includes fs, 'bin'
+    assert_includes fs, 'lib'
+    refute_includes fs, 'central.gemspec'
     fs = ls('.', dir: false)
-    refute_includes fs, "bin"
-    refute_includes fs, "lib"
-    assert_includes fs, "central.gemspec"
+    refute_includes fs, 'bin'
+    refute_includes fs, 'lib'
+    assert_includes fs, 'central.gemspec'
   end
 
   def test_symlink_functions
@@ -100,20 +100,20 @@ class CentralTest < Minitest::Unit::TestCase
   def test_copy
     f1 = "test/testfile1"
     f2 = "test/testfile2"
-    write f1,"test"
-    copy f1,f2
+    write f1, "test"
+    copy f1, f2
     assert_equal read(f1), read(f2)
-    write f1,"changed test"
-    copy f1,f2
+    write f1, 'changed test'
+    copy f1, f2
     assert_equal read(f1), read(f2)
     rm f1
     rm f2
   end
 
   def test_erb
-    write "test/testerb","<%= 'hello' %>"
-    erb 'test/testerb','test/testerboutput'
-    assert_equal "hello", read("test/testerboutput")
+    write 'test/testerb', "<%= 'hello' %>"
+    erb 'test/testerb', 'test/testerboutput'
+    assert_equal 'hello', read('test/testerboutput')
     rm 'test/testerb'
     rm 'test/testerboutput'
   end

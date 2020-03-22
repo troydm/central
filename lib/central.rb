@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 # -------------------------------------------------------------------------
 # # central - dot files manager licensed under LGPLv3 (see LICENSE file)  |
 # # written in Ruby by Dmitry Geurkov (d.geurkov@gmail.com)               |
@@ -11,6 +13,9 @@ require 'fileutils'
 # cli colors
 COLOR_RED = 31
 COLOR_GREEN = 32
+
+# monitors
+$monitors = {}
 
 # putsc, puts with color
 def color(message, color)
@@ -74,10 +79,10 @@ end
 def shell(command, verbose: false, silent: true)
   info 'Executing', command if verbose
   exit_code = nil
-  stdout = ''
-  stdout_line = ''
-  stderr = ''
-  stderr_line = ''
+  stdout = String.new
+  stdout_line = String.new
+  stderr = String.new
+  stderr_line = String.new
   Open3.popen3(command) do |_, o, e, t|
     stdout_open = true
     stderr_open = true
@@ -384,18 +389,29 @@ def copy(from, to)
 end
 
 # process erb template into an output_file
-def erb(file, output_file = nil)
+def erb(file, output_file = nil, monitor = true)
   file = abs(file)
   fail 'No erb file found', file unless file_exists?(file)
 
   if output_file.nil?
     output_file = file.end_with?('.erb') ? file[0...-4] : file + '.out'
   end
+
+  $monitors[file] = proc { erb(file, output_file, false) } if monitor
+
   out = ERB.new(File.read(file)).result
   return if File.exist?(output_file) && File.read(output_file) == out
 
   File.write(output_file, out)
   info 'Processed erb', "#{file} → #{output_file}"
+end
+
+# monitor file for changes and execute proc if file changed
+def monitor(file, &block)
+  file = abs(file)
+  fail 'No file found', file unless file_exists?(file)
+
+  $monitors[file] = block
 end
 
 # run configuration.rb file
@@ -417,12 +433,34 @@ def run_if_exists(file)
 end
 
 # run central configuration
-def central(configurations)
+def run_central(configurations)
   if configurations.instance_of?(Array) && !configurations.empty?
     configurations.each { |configuration| run configuration }
   elsif configurations.instance_of?(String)
     run configurations
   else
     run 'configuration.rb'
+  end
+end
+
+# run monitors
+def run_monitors
+  info 'Monitoring files for changes (press Ctrl-C to stop)'
+  file_mtimes = {}
+  $monitors.keys.each { |f| file_mtimes[f] = File.mtime(f) }
+  loop do
+    $monitors.keys.each do |f|
+      file_mtime = File.mtime(f)
+      next if file_mtime == file_mtimes[f]
+
+      info 'File modified', f
+      $monitors[f].call
+      file_mtimes[f] = file_mtime
+    end
+    begin
+      sleep(0.5)
+    rescue Interrupt
+      exit 0
+    end
   end
 end
