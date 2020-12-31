@@ -7,29 +7,38 @@
 # -------------------------------------------------------------------------
 
 require 'central'
+require 'optparse'
 
-unless ARGV.empty?
-  if ARGV[0] == '-v' || ARGV[0] == '--version' || ARGV[0] == '-version'
-    puts 'central v0.2.8'
-    exit 0
+VERSION = 'v0.2.9'
+
+options = {:color => true}
+OptionParser.new do |opts|
+  opts.banner = %{central #{VERSION} - created by Dmitry Geurkov (d.geurkov@gmail.com) and licensed under LGPLv3
+
+Usage: central [options] [directory|configuration.rb, ...]
+
+Description:  if directory is specified it will use configuration.rb file inside that directory
+              if no [directory|configuration.rb] is specified
+              it will use configuration.rb in current working directory
+
+Options:}
+  opts.on("-m", "--monitor", "Monitor erb files for changes and reprocess them automatically") do |_|
+    options[:monitor] = true
   end
-  if ARGV[0] == '-h' || ARGV[0] == '--help' || ARGV[0] == '-help'
-    puts 'central v0.2.8 - created by Dmitry Geurkov (d.geurkov@gmail.com)'
-    puts '                 and licensed under LGPLv3'
-    puts ''
-    puts 'Usage: central [monitor] [path/to/configuration.rb]'
-    puts ''
-    puts 'Description:   [monitor] - will monitor erb files for changes'
-    puts '                           reprocess them automatically, disabled by default'
-    puts '               if no [path/to/configuration.rb] is specified'
-    puts '               it will use configuration.rb in current working directory'
-    exit 0
+
+  opts.on("-n", "--no-color", "Do not colorize output") do |_|
+    options[:color] = false
   end
-end
-if ARGV[0] == 'monitor'
-  ARGV.shift
-  run_central(ARGV)
+
+  opts.on("-v", "--version", "Print version") do |_|
+    puts "central #{VERSION}"
+    exit
+  end
+end.parse!
+
+if options[:monitor]
+  run_central(ARGV,options[:color])
   run_monitors
 else
-  run_central(ARGV)
+  run_central(ARGV,options[:color])
 end

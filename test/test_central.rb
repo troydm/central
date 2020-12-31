@@ -117,5 +117,55 @@ class CentralTest < Minitest::Unit::TestCase
     rm 'test/testerb'
     rm 'test/testerboutput'
   end
+
+  def test_sha2
+    write 'test/test.txt', 'Some test data'
+    assert_equal Digest::SHA256.hexdigest('Some test data'), sha2('test/test.txt')
+    rm 'test/test.txt'
+  end
+
+  def test_compare_file
+    write 'test/test1.txt', 'Some test data'
+    write 'test/test2.txt', 'Some test data'
+    assert_equal true, compare_file('test/test1.txt', 'test/test2.txt')
+    write 'test/test2.txt', 'Some more test data'
+    assert_equal false, compare_file('test/test1.txt', 'test/test2.txt')
+    rm 'test/test1.txt'
+    rm 'test/test2.txt'
+  end
+
+  def test_file_time_and_size
+    write 'test/test.txt', 'Some test data'
+    assert_equal true, file_size('test/test.txt') > 0
+    assert_equal Time, file_ctime('test/test.txt').class
+    assert_equal Time, file_mtime('test/test.txt').class
+    rm 'test/test.txt'
+  end
+
+  def test_mirror
+    mkdir 'test/testa'
+    write 'test/testa/test1.txt', 'Some test data'
+    mkdir 'test/testa/testb'
+    write 'test/testa/testb/test2.txt', 'Some test data'
+    mirror 'test/testa', 'test/testb'
+    assert_equal Set.new(['test1.txt', 'testb']), Set.new(dir_entries('test/testb'))
+    write 'test/testa/test1.txt', 'Some more test data'
+    rm 'test/testa/testb', recursive: true
+    mirror 'test/testa', 'test/testb'
+    assert_equal Set.new(['test1.txt']), Set.new(dir_entries('test/testb'))
+    assert_equal 'Some more test data', read('test/testb/test1.txt')
+    rm 'test/testa', recursive: true
+    rm 'test/testb', recursive: true
+  end
+
+  def test_curl
+    curl 'https://github.com/', 'test/test.html'
+    assert_equal true, file_size('test/test.html') > 0
+    rm 'test/test.html'
+  end
+
+  def test_curl_headers
+    assert_equal 'text/html; charset=utf-8', curl_headers('https://github.com/')['content-type']
+  end
 end
 

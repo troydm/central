@@ -9,8 +9,10 @@ require 'erb'
 require 'socket'
 require 'open3'
 require 'fileutils'
+require 'digest'
 
 # cli colors
+$colored = true
 COLOR_RED = 31
 COLOR_GREEN = 32
 
@@ -19,7 +21,11 @@ $monitors = {}
 
 # putsc, puts with color
 def color(message, color)
-  "\e[#{color}m#{message}\e[0m"
+  if $colored
+    "\e[#{color}m#{message}\e[0m"
+  else
+    message
+  end
 end
 
 # info
@@ -170,6 +176,26 @@ def file_exists?(path)
   File.file?(path) && File.readable?(path)
 end
 
+# get file size
+def file_size(path)
+  File.new(abs(path)).size
+end
+
+# get file creation time
+def file_ctime(path)
+  File.new(abs(path)).ctime
+end
+
+# get file modification time
+def file_mtime(path)
+  File.new(abs(path)).mtime
+end
+
+# get directory entries
+def dir_entries(path)
+  Dir.entries(abs(path)).select { |f| f != '.' && f != '..' }
+end
+
 # check if directory exists
 def dir_exists?(path)
   path = abs(path)
@@ -190,6 +216,11 @@ end
 def symlink_path(symlink)
   _, out, = shell("readlink \"#{abs(symlink)}\" 2>&1")
   out.strip
+end
+
+# calculate SHA2 digest for a file
+def sha2(file)
+  Digest::SHA256.hexdigest read(file)
 end
 
 # make directory including intermediate directories
@@ -307,8 +338,12 @@ def git(url, path, branch: nil, silent: true, depth: nil)
 end
 
 # download url into a path using curl
-def curl(url, path, verbose: false)
+def curl(url, path, content_length_check: false, verbose: false)
   path = abs(path)
+  if content_length_check and file_exists?(path)
+    content_length = curl_headers(url, verbose: verbose)['content-length'].to_i
+    return if file_size(path) == content_length
+  end
   info 'Downloading', "#{url} → #{path}"
   exit_code, output, = shell("curl -s -S \"#{url}\"",
                              verbose: verbose, silent: true)
@@ -318,6 +353,21 @@ def curl(url, path, verbose: false)
   end
   File.write(path, output)
   info 'Downloaded', "#{url} → #{path}"
+end
+
+# get url response headers as Hash using curl
+def curl_headers(url, method: 'HEAD', verbose: false)
+  exit_code, output, = shell("curl -I -X #{method} -s -S \"#{url}\"",
+                             verbose: verbose, silent: true)
+  unless exit_code.success?
+    error output
+    fail "Couldn't get headers from", url
+  end
+  headers = {}
+  output.scan(/^(?!HTTP)([^:]+):(.*)$/).each do |m|
+    headers[m[0].strip.downcase] = m[1].sub("\r","").strip
+  end
+  headers
 end
 
 # read content of a file
@@ -364,8 +414,17 @@ def ls(path, dotfiles: false, grep: '', dir: true, file: true)
   ls
 end
 
+# compare_file
+def compare_file(from, to)
+  from = abs(from)
+  to = abs(to)
+  FileUtils.compare_file(from, to)
+end
+
 # copy_file
 def copy_file(from, to)
+  from = abs(from)
+  to = abs(to)
   fail "Couldn't access file", from unless file_exists?(from)
 
   return if file_exists?(to) && FileUtils.compare_file(from, to)
@@ -379,7 +438,27 @@ def copy(from, to)
   from = abs(from)
   to = abs(to)
   if dir_exists?(from)
-    (Dir.entries(from).select { |f| f != '.' && f != '..' }).each do |f|
+    dir_entries(from).each do |f|
+      FileUtils.mkdir_p(to)
+      copy("#{from}/#{f}", "#{to}/#{f}")
+    end
+  else
+    copy_file(from, to)
+  end
+end
+
+# mirror
+def mirror(from, to)
+  from = abs(from)
+  to = abs(to)
+  if dir_exists?(from)
+    from_entries = dir_entries(from)
+    if dir_exists?(to)
+      dir_entries(to).each do |f|
+        rm("#{to}/#{f}", recursive: true) unless from_entries.include?(f)
+      end
+    end
+    from_entries.each do |f|
       FileUtils.mkdir_p(to)
       copy("#{from}/#{f}", "#{to}/#{f}")
     end
@@ -418,6 +497,7 @@ end
 def run(file)
   cwd = pwd
   file = abs(file)
+  file = File.join(file,'configuration.rb') if not file_exists?(file) and dir_exists?(file)
   fail 'No configuration file found', file unless file_exists?(file)
 
   info 'Running configuration', file
@@ -433,7 +513,8 @@ def run_if_exists(file)
 end
 
 # run central configuration
-def run_central(configurations)
+def run_central(configurations, colored = true)
+  $colored = colored
   if configurations.instance_of?(Array) && !configurations.empty?
     configurations.each { |configuration| run configuration }
   elsif configurations.instance_of?(String)
