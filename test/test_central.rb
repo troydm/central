@@ -34,6 +34,18 @@ class CentralTest < Minitest::Unit::TestCase
     assert_equal pwd, file_dir('central.gemspec')
   end
 
+  def test_file_name
+    assert_equal 'central.gemspec', file_name('central.gemspec')
+    assert_equal 'central.gemspec', file_name('/central.gemspec')
+    assert_equal 'central.gemspec', file_name("#{pwd}/central.gemspec")
+  end
+
+  def test_file_suffix
+    assert_equal '.gemspec', file_suffix('central.gemspec')
+    assert_equal '.gemspec', file_suffix('central.another.gemspec')
+    assert_equal nil, file_suffix('central')
+  end
+
   def test_shell
     _, out, = shell('mkdir test/test-dir && ls -lh test && rmdir test/test-dir')
     assert_includes out, "test-dir"

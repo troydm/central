@@ -72,6 +72,10 @@ def osx?
   os == 'osx'
 end
 
+def macos?
+  os == 'osx'
+end
+
 def freebsd?
   os == 'freebsd'
 end
@@ -202,7 +206,19 @@ def dir_exists?(path)
   Dir.exist?(path)
 end
 
-# get directory name of a file
+# get file name of a path, optionally strip suffix if needed
+def file_name(path, strip_suffix: '')
+  File.basename(abs(path), strip_suffix)
+end
+
+# get file suffix of a path
+def file_suffix(path)
+  path = file_name(path)
+  suffix_index = path =~ /\.[^.]+$/
+  return path[suffix_index, path.size - suffix_index] if suffix_index
+end
+
+# get directory name of a path
 def file_dir(path)
   File.dirname(abs(path))
 end

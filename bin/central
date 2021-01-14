@@ -9,7 +9,7 @@
 require 'central'
 require 'optparse'
 
-VERSION = 'v0.2.9'
+VERSION = 'v0.3.0'
 
 options = {:color => true}
 OptionParser.new do |opts|
@@ -22,6 +22,10 @@ Description:  if directory is specified it will use configuration.rb file inside
               it will use configuration.rb in current working directory
 
 Options:}
+  opts.on("-i", "--irb", "Start interactive IRB REPL") do |_|
+    options[:irb] = true
+  end
+
   opts.on("-m", "--monitor", "Monitor erb files for changes and reprocess them automatically") do |_|
     options[:monitor] = true
   end
@@ -36,7 +40,16 @@ Options:}
   end
 end.parse!
 
-if options[:monitor]
+if options[:irb]
+  require 'irb'
+  $colored = true
+  $colored = options[:color] if options[:color]
+  info "Welcome to central #{VERSION} IRB repl, interactive playground for your dotcentral configuration"
+  info "Please ignore warning below as central has source function, and IRB tries to create alias for irb_source"
+  info "In order to use IRB's source functionality just call it without alias as irb_source"
+  ARGV.clear
+  IRB.start(__FILE__)
+elsif options[:monitor]
   run_central(ARGV,options[:color])
   run_monitors
 else
