@@ -9,8 +9,17 @@
 require 'central'
 require 'optparse'
 
-VERSION = 'v0.3.0'
+VERSION = 'v0.3.1'
 
+# parse extra options
+ARGV.each do |option|
+  if not option.empty? and option.index('-') == 0 and not ['-h', '--help', '-i', '--irb', '-n', '--no-color', '-v', '--version', '-m', '--monitor'].include?(option)
+    $options.append(option)
+  end
+end
+ARGV.delete_if { |option| $options.include?(option) }
+
+# parse central options
 options = {:color => true}
 OptionParser.new do |opts|
   opts.banner = %{central #{VERSION} - created by Dmitry Geurkov (d.geurkov@gmail.com) and licensed under LGPLv3

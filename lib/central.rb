@@ -11,6 +11,21 @@ require 'open3'
 require 'fileutils'
 require 'digest'
 
+# options
+$options = []
+
+# get option, returns Array if multiple or nil if none
+def option(opt)
+  options = $options.filter { |option| option.index(opt) == 0 }
+  if options.size == 0
+    return nil
+  elsif options.size == 1
+    return options[0]
+  else
+    return options
+  end
+end
+
 # cli colors
 $colored = true
 COLOR_RED = 31
@@ -100,9 +115,9 @@ def shell(command, verbose: false, silent: true)
       if stdout_open
         begin
           ch = o.read_nonblock(1)
-          stdout.insert(-1, ch)
+          stdout += ch
           unless silent
-            stdout_line.insert(-1, ch)
+            stdout_line += ch
             if ch == "\n"
               STDOUT.puts stdout_line
               stdout_line = ''
@@ -118,9 +133,9 @@ def shell(command, verbose: false, silent: true)
 
       begin
         ch = e.read_nonblock(1)
-        stderr.insert(-1, ch)
+        stderr += ch
         unless silent
-          stderr_line.insert(-1, ch)
+          stderr_line += ch
           if ch == "\n"
             STDERR.puts stderr_line
             stderr_line = ''
