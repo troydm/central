@@ -105,24 +105,16 @@ def shell(command, verbose: false, silent: true)
   info 'Executing', command if verbose
   exit_code = nil
   stdout = String.new
-  stdout_line = String.new
   stderr = String.new
-  stderr_line = String.new
   Open3.popen3(command) do |_, o, e, t|
     stdout_open = true
     stderr_open = true
     while stdout_open || stderr_open
       if stdout_open
         begin
-          ch = o.read_nonblock(1)
-          stdout += ch
-          unless silent
-            stdout_line += ch
-            if ch == "\n"
-              STDOUT.puts stdout_line
-              stdout_line = ''
-            end
-          end
+          buffer = o.read_nonblock(4096)
+          stdout << buffer
+          STDOUT.write(buffer) unless silent
         rescue IO::WaitReadable
           IO.select([o], nil, nil, 0.01) unless stderr_open
         rescue EOFError
@@ -132,15 +124,9 @@ def shell(command, verbose: false, silent: true)
       next unless stderr_open
 
       begin
-        ch = e.read_nonblock(1)
-        stderr += ch
-        unless silent
-          stderr_line += ch
-          if ch == "\n"
-            STDERR.puts stderr_line
-            stderr_line = ''
-          end
-        end
+        buffer = e.read_nonblock(4096)
+        stderr << buffer
+        STDERR.write(buffer) unless silent
       rescue IO::WaitReadable
         IO.select([e], nil, nil, 0.01) unless stdout_open
       rescue EOFError

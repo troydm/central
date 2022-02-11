@@ -43,7 +43,7 @@ class CentralTest < Minitest::Unit::TestCase
   def test_file_suffix
     assert_equal '.gemspec', file_suffix('central.gemspec')
     assert_equal '.gemspec', file_suffix('central.another.gemspec')
-    assert_equal nil, file_suffix('central')
+    assert_nil file_suffix('central')
   end
 
   def test_shell
