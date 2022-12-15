@@ -362,7 +362,7 @@ def curl(url, path, content_length_check: false, verbose: false)
     return if file_size(path) == content_length
   end
   info 'Downloading', "#{url} → #{path}"
-  exit_code, output, = shell("curl -s -S \"#{url}\"",
+  exit_code, output, = shell("curl -L -s -S \"#{url}\"",
                              verbose: verbose, silent: true)
   unless exit_code.success?
     error output
