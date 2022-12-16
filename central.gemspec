@@ -13,4 +13,5 @@ Gem::Specification.new do |s|
   s.license     = 'LGPL-3.0'
   s.executables << 'central'
   s.required_ruby_version = '>= 2.3'
+  s.add_development_dependency 'rubyzip', '>= 2.3.2', '< 3.0'
 end
