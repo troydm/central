@@ -10,6 +10,7 @@ require 'socket'
 require 'open3'
 require 'fileutils'
 require 'digest'
+require 'zip'
 
 # options
 $options = []
@@ -351,6 +352,18 @@ def git(url, path, branch: nil, silent: true, depth: nil)
                     silent: silent)
     puts out if silent
     info 'Git repository cloned', "#{url} → #{path}"
+  end
+end
+
+# unzip file to destination folder
+def unzip(file, destination)
+  FileUtils.mkdir_p(destination)
+
+  Zip::File.open(file) do |zip_file|
+    zip_file.each do |f|
+      fpath = File.join(destination, f.name)
+      zip_file.extract(f, fpath) unless File.exist?(fpath)
+    end
   end
 end
 
