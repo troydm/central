@@ -321,6 +321,29 @@ def symlink(from, to)
   end
 end
 
+# extract archive, supports tar, zip, 7z
+def extract(path, todir)
+  path = abs(path)
+  todir = abs(todir)
+  unless file_exists?(path)
+    fail "Archive file #{path} does not exists"
+  end
+  mkdir(todir)
+  info 'Extracting archive', "#{path} → #{todir}"
+  exit_code = nil, output = nil
+  if path.end_with?('.zip')
+    exit_code, output, = shell("unzip \"#{path}\" -d \"#{todir}\" 2>&1")
+  elsif path.end_with?('.7z')
+    exit_code, output, = shell("7z x -o\"#{todir}\" \"#{path}\" 2>&1")
+  else
+    exit_code, output, = shell("tar -xf \"#{path}\" -C \"#{todir}\" 2>&1")
+  end
+  unless exit_code.success?
+    error output
+    fail "Couldn't extract archive", path
+  end
+end
+
 # git clone url into a path
 def git(url, path, branch: nil, silent: true, depth: nil)
   path = abs(path)
@@ -355,14 +378,14 @@ def git(url, path, branch: nil, silent: true, depth: nil)
 end
 
 # download url into a path using curl
-def curl(url, path, content_length_check: false, verbose: false)
+def curl(url, path, content_length_check: false, verbose: false, flags: '-L -s -S')
   path = abs(path)
   if content_length_check and file_exists?(path)
-    content_length = curl_headers(url, verbose: verbose)['content-length'].to_i
+    content_length = curl_headers(url, verbose: verbose, flags: flags)['content-length'].to_i
     return if file_size(path) == content_length
   end
   info 'Downloading', "#{url} → #{path}"
-  exit_code, output, = shell("curl -L -s -S \"#{url}\"",
+  exit_code, output, = shell("curl #{flags} \"#{url}\"",
                              verbose: verbose, silent: true)
   unless exit_code.success?
     error output
@@ -373,8 +396,8 @@ def curl(url, path, content_length_check: false, verbose: false)
 end
 
 # get url response headers as Hash using curl
-def curl_headers(url, method: 'HEAD', verbose: false)
-  exit_code, output, = shell("curl -I -X #{method} -s -S \"#{url}\"",
+def curl_headers(url, method: 'HEAD', verbose: false, flags: '-L -s -S')
+  exit_code, output, = shell("curl -I -X #{method} #{flags} \"#{url}\"",
                              verbose: verbose, silent: true)
   unless exit_code.success?
     error output

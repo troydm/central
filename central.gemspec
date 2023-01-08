@@ -2,8 +2,8 @@
 
 Gem::Specification.new do |s|
   s.name        = 'central'
-  s.version     = '0.3.2'
-  s.date        = '2022-02-11'
+  s.version     = '0.3.3'
+  s.date        = '2023-01-08'
   s.summary     = 'central dotfile management'
   s.description = 'central dotfile management system'
   s.authors     = ['Dmitry Geurkov']

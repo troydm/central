@@ -9,7 +9,7 @@
 require 'central'
 require 'optparse'
 
-VERSION = 'v0.3.2'
+VERSION = 'v0.3.3'
 
 # parse extra options
 ARGV.each do |option|
